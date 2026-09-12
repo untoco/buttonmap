@@ -4,12 +4,12 @@
 
 namespace ButtonmapConfig {
 
-// Atomic CAN Base uses the AtomS3R lower connector. The two JQ FTU inputs use
-// the AtomS3R Grove port: G1 = GPIO1, G2 = GPIO2.
-constexpr uint8_t kPreviousButtonPin = 1;  // JQ FTU #1, red/white
-constexpr uint8_t kNextButtonPin = 2;      // JQ FTU #2, yellow/green
-constexpr uint8_t kCanTxPin = 5;
-constexpr uint8_t kCanRxPin = 6;
+// AtomS3R-Ext proto board: buttons use the dedicated G3/G4 pads. The Grove
+// port is reserved for Unit CAN U085: G2 = CAN_TX and G1 = CAN_RX.
+constexpr uint8_t kPreviousButtonPin = 3;  // JQ FTU #1, red/white
+constexpr uint8_t kNextButtonPin = 4;      // JQ FTU #2, yellow/green
+constexpr uint8_t kCanTxPin = 2;
+constexpr uint8_t kCanRxPin = 1;
 
 // K-CAN2 is configured as Classical CAN at 100 kbit/s. Confirm this setting
 // with a passive capture on the target car before connecting in normal mode.
