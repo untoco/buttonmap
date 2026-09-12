@@ -1,0 +1,4 @@
+.pio/
+.vscode/
+.tooling/
+compile_commands.json
