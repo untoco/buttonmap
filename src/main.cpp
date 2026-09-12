@@ -1,10 +1,10 @@
 #include <M5Unified.h>
-#include <trackskip_config.h>
+#include <buttonmap_config.h>
 #include "driver/twai.h"
 
 namespace {
 
-using namespace TrackskipConfig;
+using namespace ButtonmapConfig;
 
 struct Button {
   uint8_t pin;
@@ -32,7 +32,7 @@ void displayStatus(const char* top, uint16_t colour) {
   M5.Display.drawString(top, M5.Display.width() / 2, 32);
   M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5.Display.setTextSize(1);
-  M5.Display.drawString("K-CAN2 TRACK", M5.Display.width() / 2, 76);
+  M5.Display.drawString("K-CAN2 BUTTONMAP", M5.Display.width() / 2, 76);
 }
 
 bool transmitMedia(uint8_t command) {

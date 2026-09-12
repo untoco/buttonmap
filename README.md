@@ -1,10 +1,10 @@
-# BMW K-CAN2 Trackskip
+# BMW K-CAN2 Buttonmap
 
-`trackskip` turns the two Free-to-Use (FTU) buttons on a JQ Werks Madtrace wheel into one-shot previous/next-track commands for the BMW media system. It is a deliberately small, dedicated M5Stack module: one AtomS3R receives the two dry contacts and an Atomic CAN Base sends the confirmed media frames to K-CAN2.
+`buttonmap` maps the two Free-to-Use (FTU) buttons on a JQ Werks Madtrace wheel to vehicle functions over K-CAN2. The initial mapping is one-shot previous/next-track commands for the BMW media system, but the input and command definitions are deliberately isolated for later mappings. One AtomS3R receives the two dry contacts and an Atomic CAN Base sends the configured media frames to K-CAN2.
 
 > **Vehicle-safety boundary.** This project transmits CAN frames. It is not a passive diagnostic tool. Build and validate it on a bench first, then connect only to the intended K-CAN2 pair. Do not attach it to PT-CAN or any airbag/SRS wiring. Disconnect the battery negative before working around the airbag and retain the steering-clock-spring centre position.
 
-## What is confirmed, and what still needs a bench check
+## Initial mapping and validation boundary
 
 | Item | Status | Basis |
 | --- | --- | --- |
@@ -36,9 +36,11 @@ AtomS3R + Atomic CAN Base ───────────────── K-
 
 Do **not** join the FTU common to vehicle chassis, 12 V, a CAN wire or an airbag/SRS circuit. Verify the three wheel-side conductors with a multimeter while the wheel is unplugged: each button must short only its own signal to the shared common. For an installation with a long/noisy cable, add a small automotive-qualified input conditioner or at least validate the internal pull-ups and debounce on the actual harness before permanent assembly.
 
-## Behaviour
+## Initial behaviour
 
-On a debounced press, `trackskip` sends the relevant command once, waits 80 ms, then sends neutral. Holding a button does not repeat tracks. The Atom display shows `PREVIOUS`, `NEXT`, `READY`, or a transmit/bus fault. The serial log prints every queued frame, but a queued transmit is not proof of an accepted command; check the K-CAN2 trace and iDrive behaviour during bench validation.
+On a debounced press, `buttonmap` sends the relevant command once, waits 80 ms, then sends neutral. Holding a button does not repeat tracks. The Atom display shows `PREVIOUS`, `NEXT`, `READY`, or a transmit/bus fault. The serial log prints every queued frame, but a queued transmit is not proof of an accepted command; check the K-CAN2 trace and iDrive behaviour during bench validation.
+
+The current source names the first mapping as `previous`/`next`; future vehicle functions belong in `include/buttonmap_config.h` with their own confirmed CAN frame, neutral behaviour and bench-validation entry. A frame discovered for one function must not be assumed valid for another.
 
 ## Bench plan
 
@@ -50,8 +52,8 @@ On a debounced press, `trackskip` sends the relevant command once, waits 80 ms, 
 ## Build and upload
 
 ```bash
-git clone https://github.com/untoco/trackskip.git
-cd trackskip
+git clone https://github.com/untoco/buttonmap.git
+cd buttonmap
 python3 -m venv .tooling/platformio
 .tooling/platformio/bin/python -m pip install --upgrade pip "platformio==6.1.19"
 .tooling/platformio/bin/pio run

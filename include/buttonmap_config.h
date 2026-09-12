@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-namespace TrackskipConfig {
+namespace ButtonmapConfig {
 
 // Atomic CAN Base uses the AtomS3R lower connector. The two JQ FTU inputs use
 // the AtomS3R Grove port: G1 = GPIO1, G2 = GPIO2.
@@ -24,4 +24,4 @@ constexpr uint8_t kNeutralCommand = 0xFC;
 constexpr uint32_t kDebounceMs = 25;
 constexpr uint32_t kReleaseDelayMs = 80;
 constexpr uint32_t kTransmitTimeoutMs = 20;
-}  // namespace TrackskipConfig
+}  // namespace ButtonmapConfig
