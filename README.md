@@ -1,55 +1,55 @@
 # BMW K-CAN2 Buttonmap
 
-`buttonmap` maps the two Free-to-Use (FTU) buttons on a JQ Werks Madtrace wheel to vehicle functions over K-CAN2. The initial mapping is one-shot previous/next-track commands for the BMW media system, but the input and command definitions are deliberately isolated for later mappings. One AtomS3R receives the two dry contacts and an Atomic CAN Base sends the configured media frames to K-CAN2.
+`buttonmap` назначает двум кнопкам Free-to-Use (FTU) на руле JQ Werks Madtrace функции автомобиля по K-CAN2. Первое назначение - однократные команды перехода к предыдущему и следующему треку в медиасистеме BMW. Входы и CAN-команды вынесены отдельно, поэтому в дальнейшем им можно задать другие подтверждённые функции. Один AtomS3R принимает два сухих контакта, а Atomic CAN Base отправляет настроенные кадры в K-CAN2.
 
-> **Vehicle-safety boundary.** This project transmits CAN frames. It is not a passive diagnostic tool. Build and validate it on a bench first, then connect only to the intended K-CAN2 pair. Do not attach it to PT-CAN or any airbag/SRS wiring. Disconnect the battery negative before working around the airbag and retain the steering-clock-spring centre position.
+> **Граница безопасности.** Проект передаёт кадры CAN, а не только читает шину. Сначала соберите и проверьте его на стенде, затем подключайте только к нужной паре K-CAN2. Не подключайте к PT-CAN, проводке подушки безопасности или SRS. Перед работой около подушки безопасности отсоедините минусовую клемму аккумулятора и не смещайте центральное положение контактного кольца руля.
 
-## Initial mapping and validation boundary
+## Первое назначение и границы проверки
 
-| Item | Status | Basis |
+| Пункт | Статус | Основание |
 | --- | --- | --- |
-| Two independent FTU button signals share one common conductor. | Confirmed by the supplied JQ manual. | FTU #1 is red/white; FTU #2 is yellow/green. |
-| Previous command | Supplied and accepted for this project. | Standard CAN `0x0A3`, DLC 2: `[FD FF]`. |
-| Next command | Supplied and accepted for this project. | Standard CAN `0x0A3`, DLC 2: `[FE FF]`. |
-| Neutral command | Supplied and accepted for this project. | Standard CAN `0x0A3`, DLC 2: `[FC FF]`. |
-| K-CAN2 bitrate | Configuration assumption. | `100 kbit/s`; confirm by passive capture on this exact car before normal-mode connection. |
-| Frame DLC and neutral timing | Bench-validation item. | Firmware emits DLC 2 and neutral 80 ms after each press. |
+| Два независимых сигнала кнопок FTU используют один общий провод. | Подтверждено приложенным руководством JQ. | FTU #1 - красный/белый; FTU #2 - жёлтый/зелёный. |
+| Команда «предыдущий трек» | Получена от пользователя и принята для проекта. | Стандартный CAN `0x0A3`, DLC 2: `[FD FF]`. |
+| Команда «следующий трек» | Получена от пользователя и принята для проекта. | Стандартный CAN `0x0A3`, DLC 2: `[FE FF]`. |
+| Нейтральная команда | Получена от пользователя и принята для проекта. | Стандартный CAN `0x0A3`, DLC 2: `[FC FF]`. |
+| Скорость K-CAN2 | Допущение конфигурации. | `100 кбит/с`; до подключения в нормальном режиме подтвердите пассивным захватом на этой машине. |
+| DLC кадров и пауза до нейтрали | Требует стендовой проверки. | Прошивка использует DLC 2 и отправляет нейтраль через 80 мс после нажатия. |
 
-## Hardware
+## Оборудование
 
-| Qty. | Module | Purpose |
+| Количество | Модуль | Назначение |
 | ---: | --- | --- |
-| 1 | M5Stack AtomS3R | Controller and two button inputs. |
-| 1 | M5Stack Atomic CAN Base (CA-IS3050G) | Isolated physical CAN interface on the Atom lower connector. |
-| 1 | Atom Grove cable / strain-relieved pigtail | Connects the three FTU conductors to the Atom Grove port. |
-| 1 | Suitable automotive enclosure, fused 5 V supply and K-CAN2 harness | Installation-specific. |
+| 1 | M5Stack AtomS3R | Контроллер и два входа кнопок. |
+| 1 | M5Stack Atomic CAN Base (CA-IS3050G) | Изолированный физический интерфейс CAN в нижнем разъёме Atom. |
+| 1 | Grove-кабель Atom / пигтейл с разгрузкой натяжения | Соединяет три провода FTU с Grove-портом Atom. |
+| 1 | Подходящий автомобильный корпус, предохранённое питание 5 В и жгут K-CAN2 | Зависят от конкретной установки. |
 
-The Atomic CAN Base occupies Atom pins G5/G6. The two FTU inputs therefore use the Grove port: G1/GPIO1 and G2/GPIO2. They are configured as pull-up inputs; a closed button pulls the input to the FTU common/GND.
+Atomic CAN Base использует выводы Atom G5/G6. Поэтому два входа FTU подключаются к Grove-порту: G1/GPIO1 и G2/GPIO2. Входы используют внутреннюю подтяжку к питанию; при нажатии кнопка замыкает вход на общий провод FTU/GND.
 
 ```text
-JQ FTU common ───────────────────────────── Atom Grove GND
-JQ FTU #1 red/white (previous) ──────────── Atom Grove G1 / GPIO1
-JQ FTU #2 yellow/green (next) ───────────── Atom Grove G2 / GPIO2
+Общий провод JQ FTU ─────────────────────── Grove GND Atom
+JQ FTU #1, красный/белый (предыдущий) ───── Grove G1 / GPIO1 Atom
+JQ FTU #2, жёлтый/зелёный (следующий) ───── Grove G2 / GPIO2 Atom
 
 AtomS3R + Atomic CAN Base ───────────────── K-CAN2 CAN-H / CAN-L
 ```
 
-Do **not** join the FTU common to vehicle chassis, 12 V, a CAN wire or an airbag/SRS circuit. Verify the three wheel-side conductors with a multimeter while the wheel is unplugged: each button must short only its own signal to the shared common. For an installation with a long/noisy cable, add a small automotive-qualified input conditioner or at least validate the internal pull-ups and debounce on the actual harness before permanent assembly.
+**Не соединяйте** общий провод FTU с кузовом автомобиля, 12 В, проводом CAN или цепью подушки безопасности/SRS. Когда руль отсоединён, проверьте мультиметром все три провода со стороны руля: каждая кнопка должна замыкать только свой сигнальный провод с общим. При длинном или зашумлённом кабеле добавьте компактный автомобильный формирователь входов либо хотя бы проверьте работу внутренних подтяжек и антидребезга на реальном жгуте до окончательной установки.
 
-## Initial behaviour
+## Начальное поведение
 
-On a debounced press, `buttonmap` sends the relevant command once, waits 80 ms, then sends neutral. Holding a button does not repeat tracks. The Atom display shows `PREVIOUS`, `NEXT`, `READY`, or a transmit/bus fault. The serial log prints every queued frame, but a queued transmit is not proof of an accepted command; check the K-CAN2 trace and iDrive behaviour during bench validation.
+После нажатия с антидребезгом `buttonmap` отправляет соответствующую команду один раз, ждёт 80 мс и отправляет нейтраль. Удержание кнопки не листает треки повторно. На дисплее Atom показываются `PREVIOUS`, `NEXT`, `READY` или ошибка передачи/шины. В последовательный журнал выводится каждый поставленный в очередь кадр, но это не доказывает, что команда принята: на стенде проверьте трассу K-CAN2 и реакцию iDrive.
 
-The current source names the first mapping as `previous`/`next`; future vehicle functions belong in `include/buttonmap_config.h` with their own confirmed CAN frame, neutral behaviour and bench-validation entry. A frame discovered for one function must not be assumed valid for another.
+В исходном коде первое назначение называется `previous`/`next`. Новые функции автомобиля добавляйте в `include/buttonmap_config.h` только вместе с подтверждённым CAN-кадром, правилом нейтрального значения и записью в плане стендовой проверки. Кадр, найденный для одной функции, нельзя считать подходящим для другой.
 
-## Bench plan
+## План стендовой проверки
 
-1. With the controller unpowered and disconnected from the car, verify the FTU common and two button contacts using continuity only.
-2. Power the Atom from USB. Check that each press produces exactly one command and `[FC FF]` after 80 ms in a CAN analyser trace.
-3. On the target vehicle, capture K-CAN2 passively first. Confirm 100 kbit/s, standard ID `0x0A3`, DLC 2, and that no existing ECU produces a conflicting frame.
-4. Only then reconnect the Atomic CAN Base in normal mode and test one command at a time with a stable power supply. If the command does not work, unplug the module and return to passive capture; do not try other buses or IDs.
+1. На выключенном контроллере, не подключённом к автомобилю, проверьте общий провод FTU и контакты обеих кнопок только измерением прозвонки.
+2. Подайте на Atom питание по USB. По трассе CAN-анализатора убедитесь, что каждое нажатие даёт ровно одну команду и `[FC FF]` через 80 мс.
+3. На целевой машине сначала пассивно запишите K-CAN2. Подтвердите скорость 100 кбит/с, стандартный ID `0x0A3`, DLC 2 и отсутствие конфликтующего кадра от другого блока.
+4. Только после этого подключите Atomic CAN Base в нормальном режиме и проверяйте по одной команде со стабильным питанием. Если команда не работает, отключите модуль и вернитесь к пассивному захвату; не подбирайте другие шины или ID.
 
-## Build and upload
+## Сборка и загрузка
 
 ```bash
 git clone https://github.com/untoco/buttonmap.git
@@ -61,10 +61,10 @@ python3 -m venv .tooling/platformio
 .tooling/platformio/bin/pio run --target upload --upload-port /dev/cu.usbmodem101
 ```
 
-Choose the actual port reported by `pio device list`; the example port above is not universal. The project intentionally does not upload automatically.
+Используйте фактический порт из вывода `pio device list`: указанный в примере порт не универсален. Проект намеренно не загружает прошивку автоматически.
 
-## Sources
+## Источники
 
-- JQ Werks Madtrace user manual supplied with this task: FTU #1/FTU #2 wiring designation and the manufacturer’s airbag/clock-spring warnings.
-- [M5Stack Atomic CAN Base documentation](https://docs.m5stack.com/en/atom/Atomic%20CAN%20Base) for the CA-IS3050G interface and Atom connector assignment.
-- [Espressif TWAI API](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/twai.html) for normal-mode transmission and bus-off handling.
+- Руководство JQ Werks Madtrace, приложенное к задаче: обозначение проводов FTU #1/FTU #2 и предупреждения производителя по подушке безопасности и контактному кольцу.
+- [Документация M5Stack Atomic CAN Base](https://docs.m5stack.com/en/atom/Atomic%20CAN%20Base): интерфейс CA-IS3050G и назначение разъёма Atom.
+- [API Espressif TWAI](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/twai.html): передача в нормальном режиме и обработка состояния bus-off.
