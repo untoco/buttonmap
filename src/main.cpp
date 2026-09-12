@@ -1,4 +1,4 @@
-#include <Arduino.h>
+#include <M5Unified.h>
 #include <buttonmap_config.h>
 #include "driver/twai.h"
 
@@ -24,8 +24,15 @@ bool canReady = false;
 bool neutralPending = false;
 uint32_t neutralDueMs = 0;
 
-void reportStatus(const char* status) {
-  Serial.printf("STATUS: %s\n", status);
+void displayStatus(const char* top, uint16_t colour) {
+  M5.Display.fillScreen(TFT_BLACK);
+  M5.Display.setTextDatum(middle_center);
+  M5.Display.setTextColor(colour, TFT_BLACK);
+  M5.Display.setTextSize(2);
+  M5.Display.drawString(top, M5.Display.width() / 2, 32);
+  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5.Display.setTextSize(1);
+  M5.Display.drawString("K-CAN2 BUTTONMAP", M5.Display.width() / 2, 76);
 }
 
 bool transmitMedia(uint8_t command) {
@@ -37,7 +44,7 @@ bool transmitMedia(uint8_t command) {
   const esp_err_t result = twai_transmit(&message, pdMS_TO_TICKS(kTransmitTimeoutMs));
   if (result != ESP_OK) {
     Serial.printf("TX %02X failed: %s\n", command, esp_err_to_name(result));
-    reportStatus("CAN TX ERROR");
+    displayStatus("CAN TX ERROR", TFT_RED);
     return false;
   }
   Serial.printf("TX %03lX [%02X %02X]\n", static_cast<unsigned long>(kMediaCanId),
@@ -76,7 +83,7 @@ void queueClick(uint8_t command) {
   if (transmitMedia(command)) {
     neutralPending = true;
     neutralDueMs = millis() + kReleaseDelayMs;
-    reportStatus(command == kPreviousCommand ? "PREVIOUS" : "NEXT");
+    displayStatus(command == kPreviousCommand ? "PREVIOUS" : "NEXT", TFT_GREEN);
   }
 }
 
@@ -99,7 +106,7 @@ void updateCanAlerts() {
   if (alerts & TWAI_ALERT_BUS_OFF) {
     canReady = false;
     Serial.println("K-CAN2 bus-off; transmission stopped");
-    reportStatus("CAN BUS-OFF");
+    displayStatus("CAN BUS-OFF", TFT_RED);
   }
   if (alerts & TWAI_ALERT_TX_FAILED) Serial.println("CAN frame was not acknowledged");
 }
@@ -107,6 +114,8 @@ void updateCanAlerts() {
 }  // namespace
 
 void setup() {
+  auto config = M5.config();
+  M5.begin(config);
   Serial.begin(115200);
   pinMode(kPreviousButtonPin, INPUT_PULLUP);
   pinMode(kNextButtonPin, INPUT_PULLUP);
@@ -114,7 +123,7 @@ void setup() {
       digitalRead(kPreviousButtonPin) == LOW;
   nextButton.sampledPressed = nextButton.stablePressed = digitalRead(kNextButtonPin) == LOW;
   canReady = initialiseCan();
-  reportStatus(canReady ? "READY" : "CAN ERROR");
+  displayStatus(canReady ? "READY" : "CAN ERROR", canReady ? TFT_GREEN : TFT_RED);
 }
 
 void loop() {
@@ -124,7 +133,7 @@ void loop() {
   if (neutralPending && static_cast<int32_t>(now - neutralDueMs) >= 0) {
     transmitMedia(kNeutralCommand);
     neutralPending = false;
-    reportStatus("READY");
+    displayStatus("READY", TFT_GREEN);
   }
   if (canReady) updateCanAlerts();
   delay(2);
