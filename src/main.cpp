@@ -1,4 +1,5 @@
 #include <M5Unified.h>
+#include <Preferences.h>
 #include <buttonmap_config.h>
 #include <can_presets.h>
 #include "driver/twai.h"
@@ -7,7 +8,7 @@ namespace {
 
 using namespace ButtonmapConfig;
 using ButtonmapCan::Frame;
-using ButtonmapCan::kActivePreset;
+using ButtonmapCan::Preset;
 
 enum class Action : uint8_t { Button1, Button2 };
 
@@ -26,8 +27,16 @@ struct Button {
 Button firstButton{kButton1Pin, Action::Button1};
 Button secondButton{kButton2Pin, Action::Button2};
 bool canReady = false;
+bool canDriverInstalled = false;
+uint32_t canDriverBitrate = 0;
 bool neutralPending = false;
 uint32_t neutralDueMs = 0;
+uint8_t activePresetIndex = ButtonmapCan::kDefaultPresetIndex;
+bool presetSwitchPending = false;
+
+const Preset& activePreset() {
+  return ButtonmapCan::kPresets[activePresetIndex];
+}
 
 void displayStatus(const char* top, uint16_t colour) {
   M5.Display.fillScreen(TFT_BLACK);
@@ -37,7 +46,38 @@ void displayStatus(const char* top, uint16_t colour) {
   M5.Display.drawString(top, M5.Display.width() / 2, 32);
   M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5.Display.setTextSize(1);
-  M5.Display.drawString(kActivePreset.name, M5.Display.width() / 2, 76);
+  M5.Display.drawString(activePreset().name, M5.Display.width() / 2, 76);
+}
+
+void displayPresetStatus() {
+  if (!activePreset().canConfigured) {
+    displayStatus("NO CODES", TFT_YELLOW);
+  } else {
+    displayStatus(canReady ? "READY" : "CAN ERROR", canReady ? TFT_GREEN : TFT_RED);
+  }
+}
+
+uint8_t loadPresetIndex() {
+  Preferences preferences;
+  if (!preferences.begin("buttonmap", true)) {
+    Serial.println("Preset storage unavailable; using MUSIC");
+    return ButtonmapCan::kDefaultPresetIndex;
+  }
+  const uint8_t index = preferences.getUChar("preset", ButtonmapCan::kDefaultPresetIndex);
+  preferences.end();
+  if (index >= ButtonmapCan::kPresetCount) {
+    Serial.println("Stored preset is unknown; using MUSIC");
+    return ButtonmapCan::kDefaultPresetIndex;
+  }
+  return index;
+}
+
+bool savePresetIndex(uint8_t index) {
+  Preferences preferences;
+  if (!preferences.begin("buttonmap", false)) return false;
+  const bool saved = preferences.putUChar("preset", index) == 1;
+  preferences.end();
+  return saved;
 }
 
 bool validFrame(const Frame& frame) {
@@ -81,11 +121,19 @@ bool canTiming(uint32_t bitrate, twai_timing_config_t& timing) {
   }
 }
 
-bool initialiseCan() {
-  if (!validFrame(kActivePreset.button1) || !validFrame(kActivePreset.button2) ||
-      !validFrame(kActivePreset.neutral)) {
+bool initialiseCan(const Preset& preset) {
+  if (!preset.canConfigured) return false;
+  if (!validFrame(preset.button1) || !validFrame(preset.button2) ||
+      !validFrame(preset.neutral)) {
     Serial.println("Invalid CAN frame in active preset");
     return false;
+  }
+  if (canReady && canDriverBitrate == preset.bitrate) return true;
+  if (canDriverInstalled) {
+    twai_stop();
+    twai_driver_uninstall();
+    canDriverInstalled = false;
+    canReady = false;
   }
   twai_general_config_t general =
       TWAI_GENERAL_CONFIG_DEFAULT(static_cast<gpio_num_t>(kCanTxPin),
@@ -93,9 +141,9 @@ bool initialiseCan() {
   general.tx_queue_len = 4;
   general.rx_queue_len = 0;
   twai_timing_config_t timing = {};
-  if (!canTiming(kActivePreset.bitrate, timing)) {
+  if (!canTiming(preset.bitrate, timing)) {
     Serial.printf("Unsupported CAN bitrate: %lu\n",
-                  static_cast<unsigned long>(kActivePreset.bitrate));
+                  static_cast<unsigned long>(preset.bitrate));
     return false;
   }
   // Reception is unused (rx_queue_len = 0); this SDK exposes an accept-all
@@ -106,26 +154,48 @@ bool initialiseCan() {
     Serial.printf("TWAI install failed: %s\n", esp_err_to_name(installResult));
     return false;
   }
+  canDriverInstalled = true;
   if (twai_start() != ESP_OK) {
     twai_driver_uninstall();
+    canDriverInstalled = false;
     return false;
   }
+  canReady = true;
+  canDriverBitrate = preset.bitrate;
   uint32_t alerts = 0;
   twai_reconfigure_alerts(TWAI_ALERT_TX_SUCCESS | TWAI_ALERT_TX_FAILED | TWAI_ALERT_BUS_OFF,
                           &alerts);
-  Serial.printf("CAN ready: preset %s, %lu bit/s\n", kActivePreset.name,
-                static_cast<unsigned long>(kActivePreset.bitrate));
+  Serial.printf("CAN ready: %lu bit/s\n", static_cast<unsigned long>(preset.bitrate));
   return true;
 }
 
+void switchToNextPreset() {
+  const uint8_t nextIndex = (activePresetIndex + 1) % ButtonmapCan::kPresetCount;
+  if (!savePresetIndex(nextIndex)) {
+    Serial.println("Preset was not saved; selection unchanged");
+    displayStatus("SAVE ERROR", TFT_RED);
+    return;
+  }
+  activePresetIndex = nextIndex;
+  if (activePreset().canConfigured) initialiseCan(activePreset());
+  Serial.printf("Active preset: %s\n", activePreset().name);
+  displayPresetStatus();
+}
+
 void queueClick(Action action) {
+  const Preset& preset = activePreset();
+  if (!preset.canConfigured) {
+    Serial.printf("%s: CAN codes are not configured\n", preset.name);
+    displayPresetStatus();
+    return;
+  }
   if (!canReady || neutralPending) return;
-  const Frame& frame = action == Action::Button1 ? kActivePreset.button1 : kActivePreset.button2;
+  const Frame& frame = action == Action::Button1 ? preset.button1 : preset.button2;
   if (transmitFrame(frame)) {
     neutralPending = true;
-    neutralDueMs = millis() + kActivePreset.releaseDelayMs;
-    displayStatus(action == Action::Button1 ? kActivePreset.button1Label
-                                            : kActivePreset.button2Label,
+    neutralDueMs = millis() + preset.releaseDelayMs;
+    displayStatus(action == Action::Button1 ? preset.button1Label
+                                            : preset.button2Label,
                   TFT_GREEN);
   }
 }
@@ -149,7 +219,7 @@ void updateCanAlerts() {
   if (alerts & TWAI_ALERT_BUS_OFF) {
     canReady = false;
     Serial.println("K-CAN2 bus-off; transmission stopped");
-    displayStatus("CAN BUS-OFF", TFT_RED);
+    if (activePreset().canConfigured) displayStatus("CAN BUS-OFF", TFT_RED);
   }
   if (alerts & TWAI_ALERT_TX_FAILED) Serial.println("CAN frame was not acknowledged");
 }
@@ -165,19 +235,33 @@ void setup() {
   firstButton.sampledPressed = firstButton.stablePressed =
       digitalRead(kButton1Pin) == LOW;
   secondButton.sampledPressed = secondButton.stablePressed = digitalRead(kButton2Pin) == LOW;
-  canReady = initialiseCan();
-  displayStatus(canReady ? "READY" : "CAN ERROR", canReady ? TFT_GREEN : TFT_RED);
+  activePresetIndex = loadPresetIndex();
+  if (activePreset().canConfigured) initialiseCan(activePreset());
+  Serial.printf("Active preset: %s\n", activePreset().name);
+  displayPresetStatus();
 }
 
 void loop() {
+  M5.update();
   const uint32_t now = millis();
   updateButton(firstButton, now);
   updateButton(secondButton, now);
   if (neutralPending && static_cast<int32_t>(now - neutralDueMs) >= 0) {
-    transmitFrame(kActivePreset.neutral);
+    const bool sent = transmitFrame(activePreset().neutral);
     neutralPending = false;
-    displayStatus("READY", TFT_GREEN);
+    if (sent) displayPresetStatus();
   }
   if (canReady) updateCanAlerts();
+  if (M5.BtnA.wasPressed()) {
+    if (neutralPending) {
+      presetSwitchPending = true;
+    } else {
+      switchToNextPreset();
+    }
+  }
+  if (presetSwitchPending && !neutralPending) {
+    presetSwitchPending = false;
+    switchToNextPreset();
+  }
   delay(2);
 }
